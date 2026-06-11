@@ -1,12 +1,10 @@
 """
 AI Sound/Gesture Control Agent
-================================
-Portfolio project demonstrating real-time sensor input → LLM Agent → system actions.
+
 
 Architecture:
   Microphone / Webcam  →  Transcription / CV  →  Anthropic Claude (Tool Use)  →  OS Actions
 
-Author: [Your Name]
 """
 from dotenv import load_dotenv
 load_dotenv()
@@ -23,7 +21,7 @@ from typing import Optional
 
 import anthropic
 
-# ── Optional imports (graceful degradation) ──────────────────────────────────
+#Optional imports
 try:
     import speech_recognition as sr
     SPEECH_AVAILABLE = True
@@ -434,8 +432,8 @@ def run_gesture_mode(duration: int = 30):
 
 BANNER = r"""
 ╔══════════════════════════════════════════════════════╗
-║         AI Sound / Gesture Control Agent             ║
-║         Real-time Sensor → LLM → OS Actions          ║
+║         AI Sound - Gesture Control Agent             ║
+║                                                      ║
 ╚══════════════════════════════════════════════════════╝
 """
 
@@ -485,13 +483,13 @@ def main():
             run_gesture_mode(duration=60)
 
         elif choice == "3":
-            print("\n⌨️  Text mode — type your command (empty line to go back)\n")
+            print("\n  Text mode — type your command (empty line to go back)\n")
             while True:
                 cmd = input("Command> ").strip()
                 if not cmd:
                     break
                 reply = run_agent(cmd)
-                print(f"🤖 Agent: {reply}\n")
+                print(f" Agent: {reply}\n")
 
         elif choice == "q":
             print("Goodbye!")
