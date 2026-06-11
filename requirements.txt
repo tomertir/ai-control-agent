@@ -1,0 +1,13 @@
+## Core (required)
+anthropic>=0.40.0
+
+## Voice input
+SpeechRecognition>=3.10.0
+pyaudio>=0.2.14          # microphone access — may need: brew install portaudio (macOS) or apt install portaudio19-dev (Linux)
+
+## Gesture input
+opencv-python>=4.9.0
+mediapipe>=0.10.0
+
+## System control
+pyautogui>=0.9.54
