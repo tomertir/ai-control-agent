@@ -1,2 +1,2 @@
-## Demo
-[![Watch demo](https://youtu.be/qytfNAuzK7U)
+## Watch Demo
+https://youtu.be/qytfNAuzK7U
