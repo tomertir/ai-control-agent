@@ -1,11 +1,4 @@
-"""
-AI Sound/Gesture Control Agent
 
-
-Architecture:
-  Microphone / Webcam  →  Transcription / CV  →  Anthropic Claude (Tool Use)  →  OS Actions
-
-"""
 from dotenv import load_dotenv
 load_dotenv()
 import os
@@ -21,19 +14,12 @@ from typing import Optional
 
 import anthropic
 
-#Optional imports
+
 try:
     import speech_recognition as sr
     SPEECH_AVAILABLE = True
 except ImportError:
     SPEECH_AVAILABLE = False
-
-try:
-    import cv2
-    import mediapipe as mp
-    GESTURE_AVAILABLE = True
-except ImportError:
-    GESTURE_AVAILABLE = False
 
 try:
     import pyautogui
@@ -42,7 +28,7 @@ except ImportError:
     GUI_AVAILABLE = False
 
 
-# OS Action Tools
+
 
 def open_application(app_name: str) -> str:
     """Open an application by name."""
@@ -152,7 +138,6 @@ def take_screenshot() -> str:
         return f"Screenshot error: {e}"
 
 
-#(Anthropic tool_use schema)
 
 TOOLS = [
     {
@@ -228,9 +213,8 @@ TOOL_FUNCTIONS = {
 }
 
 
-# Anthropic Agent
 
-SYSTEM_PROMPT = """You are an AI desktop control agent. You receive voice commands or gesture labels from the user
+SYSTEM_PROMPT = """You are an AI desktop control agent. You receive voice or text commands from the user
 and execute the appropriate system action using your tools.
 
 Rules:
@@ -246,7 +230,6 @@ def run_agent(user_input: str) -> str:
     """Send input to Claude with tool-use and execute the chosen action."""
     messages = [{"role": "user", "content": user_input}]
 
-    # First LLM call — may request a tool
     response = client.messages.create(
         model="claude-opus-4-5",
         max_tokens=512,
@@ -255,7 +238,7 @@ def run_agent(user_input: str) -> str:
         messages=messages,
     )
 
-    # Agentic loop (handles multi-step tool calls)
+
     while response.stop_reason == "tool_use":
         tool_uses = [b for b in response.content if b.type == "tool_use"]
         tool_results = []
@@ -275,7 +258,7 @@ def run_agent(user_input: str) -> str:
                 "content": result,
             })
 
-        # Append assistant + tool results and continue
+
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results})
 
@@ -287,12 +270,11 @@ def run_agent(user_input: str) -> str:
             messages=messages,
         )
 
-    # Extract final text
+
     text_blocks = [b for b in response.content if hasattr(b, "text")]
     return text_blocks[0].text if text_blocks else "(no response)"
 
 
-#Speech Input
 
 def listen_once(timeout: int = 5) -> Optional[str]:
     """Listen for one voice command and return the transcript."""
@@ -320,119 +302,10 @@ def listen_once(timeout: int = 5) -> Optional[str]:
             return None
 
 
-#Gesture Input
-
-# Maps gesture → natural-language command sent to the agent
-GESTURE_COMMANDS = {
-    "thumbs_up":   "play media",
-    "thumbs_down": "pause media",
-    "open_hand":   "scroll down",
-    "fist":        "scroll up",
-    "peace":       "take a screenshot",
-    "pointing_up": "open browser",
-}
-
-
-def classify_gesture(hand_landmarks) -> Optional[str]:
-    """Classify a MediaPipe hand landmark result into a gesture label."""
-    if not hand_landmarks:
-        return None
-
-    lm = hand_landmarks.landmark
-
-    # Finger tip and MCP indices for each finger
-    tips = [4, 8, 12, 16, 20]
-    mcps = [2, 5, 9, 13, 17]
-
-    # Extended = tip above MCP (in image coords y is flipped)
-    extended = []
-    for tip, mcp in zip(tips, mcps):
-        # Thumb uses x-axis check
-        if tip == 4:
-            extended.append(lm[tip].x < lm[mcp].x)
-        else:
-            extended.append(lm[tip].y < lm[mcp].y)
-
-    thumb, index, middle, ring, pinky = extended
-
-    if thumb and not index and not middle and not ring and not pinky:
-        return "thumbs_up"
-    if not thumb and index and not middle and not ring and not pinky:
-        return "pointing_up"
-    if not thumb and index and middle and not ring and not pinky:
-        return "peace"
-    if not thumb and index and middle and ring and pinky:
-        return "open_hand"
-    if not any(extended):
-        return "fist"
-    if not thumb and not index and not middle and not ring and not pinky:
-        return "thumbs_down"
-
-    return None
-
-
-def run_gesture_mode(duration: int = 30):
-    """Run gesture detection for `duration` seconds."""
-    if not GESTURE_AVAILABLE:
-        print("OpenCV / MediaPipe not installed.")
-        print("   Run: pip install opencv-python mediapipe")
-        return
-
-    mp_hands = mp.solutions.hands
-    mp_draw  = mp.solutions.drawing_utils
-
-    cap = cv2.VideoCapture(0)
-    hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
-
-    last_gesture = None
-    last_time    = 0
-    cooldown     = 2.0  # seconds between repeated gestures
-
-    print(f"Gesture mode active for {duration}s — show hand gestures to camera")
-    print("   Supported:", ", ".join(GESTURE_COMMANDS.keys()))
-
-    start = time.time()
-    while time.time() - start < duration:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        frame = cv2.flip(frame, 1)
-        rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = hands.process(rgb)
-
-        gesture = None
-        if result.multi_hand_landmarks:
-            for hl in result.multi_hand_landmarks:
-                mp_draw.draw_landmarks(frame, hl, mp_hands.HAND_CONNECTIONS)
-                gesture = classify_gesture(hl)
-
-        now = time.time()
-        if gesture and (gesture != last_gesture or now - last_time > cooldown):
-            command = GESTURE_COMMANDS.get(gesture)
-            if command:
-                print(f"\nGesture: {gesture} → \"{command}\"")
-                reply = run_agent(command)
-                print(f"   Agent: {reply}")
-                last_gesture = gesture
-                last_time    = now
-
-        label = f"Gesture: {gesture or 'none'}"
-        cv2.putText(frame, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        cv2.imshow("AI Gesture Control", frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-
-#CLI Entry Point
 
 BANNER = r"""
 ╔══════════════════════════════════════════════════════╗
-║         AI Sound - Gesture Control Agent             ║
+║                AI Sound Control Agent                ║
 ║                                                      ║
 ╚══════════════════════════════════════════════════════╝
 """
@@ -440,8 +313,7 @@ BANNER = r"""
 MENU = """
 Modes:
   [1] Voice continuous loop    (microphone → Claude → action)
-  [2] Gesture detection        (webcam → MediaPipe → Claude → action)
-  [3] Text input               (type command → Claude → action)
+  [2] Text input               (type command → Claude → action)
   [q] Quit
 """
 
@@ -456,7 +328,6 @@ def main():
 
     print(f"Dependencies:")
     print(f"  Speech Recognition: {'✅' if SPEECH_AVAILABLE else '❌ (pip install SpeechRecognition pyaudio)'}")
-    print(f"  Gesture (OpenCV):   {'✅' if GESTURE_AVAILABLE else '❌ (pip install opencv-python mediapipe)'}")
     print(f"  GUI Control:        {'✅' if GUI_AVAILABLE else '❌ (pip install pyautogui)'}")
     print()
 
@@ -480,9 +351,6 @@ def main():
                 print("\nStopped voice mode.")
 
         elif choice == "2":
-            run_gesture_mode(duration=60)
-
-        elif choice == "3":
             print("\n  Text mode — type your command (empty line to go back)\n")
             while True:
                 cmd = input("Command> ").strip()
